@@ -1,3 +1,5 @@
+you need to install also the library nexus decoder that you find in this repo
+
 # ESP-SMART-Thermostat
 How to use an ESP32 or ESP8266 to create a smart thermostat
 
