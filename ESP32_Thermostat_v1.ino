@@ -21,9 +21,7 @@
 #include <SPIFFS.h>                    // Built-in
 #include "ESPAsyncWebServer.h"         // https://github.com/me-no-dev/ESPAsyncWebServer/tree/63b5303880023f17e1bca517ac593d8a33955e94
 #include "AsyncTCP.h"                  // https://github.com/me-no-dev/AsyncTCP
-#include <Adafruit_Sensor.h>           // Adafruit sensor
-#include <Adafruit_BME280.h>           // For BME280 support
-Adafruit_BME280 sensor;                // I2C mode
+#include <Nexus_Decoder.h>
 
 //################  VERSION  ###########################################
 String version = "1.0";      // Programme version, see change log at end
@@ -42,7 +40,6 @@ const char* ServerName = "thermostat"; // Connect to the server with http://hpse
 #define LEDPIN          5              // Define the LED Control pin
 #define RelayReverse    false          // Set to true for Relay that requires a signal LOW for ON
 
-#define SensorAddress   0x76           // Use 0x77 for an Adafruit variant
 #define simulating      OFF            // Switch OFF for actual sensor readings, ON for simulated random values
 
 typedef struct {
@@ -75,7 +72,8 @@ const String data2Colour    = "orange";
 //################ VARIABLES ################
 const char* ssid       = "yourSSID";             // WiFi SSID     replace with details for your local network
 const char* password   = "YourPASSWORD";         // WiFi Password replace with details for your local network
-const char* Timezone   = "GMT0BST,M3.5.0/01,M10.5.0/02";
+//const char* Timezone   = "GMT0BST,M3.5.0/01,M10.5.0/02";
+const char* Timezone = "CET-1CEST,M3.5.0,M10.5.0/3"; // Central Europe (Italy)
 // Example time zones
 //const char* Timezone = "MET-1METDST,M3.5.0/01,M10.5.0/02"; // Most of Europe
 //const char* Timezone = "CET-1CEST,M3.5.0,M10.5.0/3";       // Central Europe
@@ -105,7 +103,7 @@ String TimerState           = "OFF";      // Current setting of the timer
 String Units                = "M";        // or Units = "I" for °F and 12:12pm time format
 
 String webpage              = "";         // General purpose variable to hold HTML code for display
-int    TimerCheckDuration   = 5000;       // Check for timer event every 5-seconds
+int    TimerCheckDuration   = 57850;       // Period of temperature sensor TX
 int    LastReadingDuration  = 1;          // Add sensor reading every n-mins
 int    LastTimerSwitchCheck = 0;          // Counter for last timer check
 int    LastReadingCheck     = 0;          // Counter for last reading saved check
@@ -116,6 +114,11 @@ AsyncWebServer server(80); // Server on IP address port 80 (web-browser default,
 // To access server from outside of a WiFi (LAN) network e.g. on port 8080 add a rule on your Router that forwards a connection request
 // to http://your_WAN_address:8080/ to http://your_LAN_address:8080 and then you can view your ESP server from anywhere.
 // Example http://yourhome.ip:8080 and your ESP Server is at 192.168.0.40, then the request will be directed to http://192.168.0.40:8080
+
+
+//new
+NEXUS_DATA nexusData;
+#define RECEIVER_PIN 2
 
 //#########################################################################################
 void setup() {
@@ -193,15 +196,18 @@ void setup() {
     request->redirect("/homepage");                       // Go back to home page
   });
   server.begin();
-  StartSensor();
-  ReadSensor();                                           // Get current sensor values
+  //StartSensor();
+  //ReadSensor();                                           // Get current sensor values
   for (int r = 0; r < SensorReadings; r++) {
     sensordata[1][r].Temp = Temperature;
     sensordata[1][r].Humi = Humidity;
   }
-  ActuateHeating(OFF);                                    // Switch heating OFF
+  ActuateHeating(OFF);  // Switch heating OFF
+  config_receiver(RECEIVER_PIN);                                  
   ReadSensor();                                           // Get current sensor values
   LastTimerSwitchCheck = millis() + TimerCheckDuration;   // preload timer value with update duration
+
+
 }
 //#########################################################################################
 void loop() {
@@ -218,7 +224,7 @@ void loop() {
 }
 //#########################################################################################
 void Homepage() {
-  ReadSensor();
+ // ReadSensor();
   append_HTML_header(Refresh);
   webpage += "<h2>Smart Thermostat Status</h2><br>";
   webpage += "<div class='numberCircle'><span class=" + String((RelayState == "ON" ? "'on'>" : "'off'>")) + String(Temperature, 1) + "&deg;</span></div><br><br><br>";
@@ -536,12 +542,10 @@ void ReadSensor() {
   }
   else
   {
-    while (isnan(sensor.readTemperature())) { }  // Make sure there are no reading errors
-    Temperature = sensor.readTemperature();      // Read the current temperature
+    Temperature =  nexusData.Temperature;      // Read the current temperature
     if (Temperature >= 50 || Temperature < -30) Temperature = LastTemperature; // Check and correct any errorneous readings
     LastTemperature = Temperature;
-    while (isnan(sensor.readHumidity())) { }     // Make sure there are no reading errors
-    Humidity = sensor.readHumidity();
+    Humidity = nexusData.Humidity;
     Serial.println("Temperature = " + String(Temperature, 1) + ", Humidity = " + String(Humidity, 0));
   }
 }
@@ -646,7 +650,7 @@ void StartWiFi() {
   IPAddress dns(8, 8, 8, 8); // Use Google as DNS
   WiFi.disconnect();
   WiFi.mode(WIFI_STA);       // switch off AP
-  WiFi.setAutoConnect(true);
+  WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
@@ -771,23 +775,7 @@ void RecoverSettings() {
   }
 }
 //#########################################################################################
-void StartSensor() {
-  Wire.setClock(100000);                           // Slow down the SPI bus for some BME280 devices
-  if (!simulating) {                               // If not sensor simulating, then start the real one
-    bool status = sensor.begin(SensorAddress);     // You can also pass a Wire library object like &Wire2, e.g. status = bme.begin(0x76, &Wire2);
-    if (!status) {
-      Serial.println("Could not find a valid BME280 sensor, check wiring, address and sensor ID!");
-      Serial.print("SensorID is: 0x"); Serial.println(sensor.sensorID(), 16);
-      Serial.print("       ID of 0xFF probably means a bad address, or a BMP 180 or BMP 085 or BMP280\n");
-      Serial.print("  ID of 0x56-0x58 represents a BMP 280,\n");
-      Serial.print("       ID of 0x60 represents a BME 280.\n");
-    }
-    else {
-      Serial.println("Sensor started...");
-    }
-    delay(1000);                                   // Wait for sensor to start
-  }
-}
+
 //#########################################################################################
 String WiFiSignal() {
   float Signal = WiFi.RSSI();
