@@ -70,8 +70,8 @@ const String data1Colour    = "red";
 const String data2Colour    = "orange";
 
 //################ VARIABLES ################
-const char* ssid       = "yourSSID";             // WiFi SSID     replace with details for your local network
-const char* password   = "YourPASSWORD";         // WiFi Password replace with details for your local network
+const char* ssid       = "Vodafone-34590861";             // WiFi SSID     replace with details for your local network
+const char* password   = "i26z8a2e7f7jkmu";         // WiFi Password replace with details for your local network
 //const char* Timezone   = "GMT0BST,M3.5.0/01,M10.5.0/02";
 const char* Timezone = "CET-1CEST,M3.5.0,M10.5.0/3"; // Central Europe (Italy)
 // Example time zones
@@ -117,9 +117,8 @@ AsyncWebServer server(80); // Server on IP address port 80 (web-browser default,
 
 
 //new
-NEXUS_DATA nexusData;
-#define RECEIVER_PIN 2
-
+#define RECEIVER_PIN 17
+int fatto = 0;
 //#########################################################################################
 void setup() {
   SetupSystem();                          // General system setup
@@ -203,24 +202,31 @@ void setup() {
     sensordata[1][r].Humi = Humidity;
   }
   ActuateHeating(OFF);  // Switch heating OFF
-  config_receiver(RECEIVER_PIN);                                  
-  ReadSensor();                                           // Get current sensor values
+  config_receiver(RECEIVER_PIN);         
+                                 // Get current sensor values
   LastTimerSwitchCheck = millis() + TimerCheckDuration;   // preload timer value with update duration
 
-
+   int_enable = 1;
 }
 //#########################################################################################
 void loop() {
-  if ((millis() - LastTimerSwitchCheck) > TimerCheckDuration) {
+  if ((millis() - LastTimerSwitchCheck) > TimerCheckDuration || fatto == 0) {
     LastTimerSwitchCheck = millis();                      // Reset time
-    ReadSensor();                                         // Get sensor readings, or get simulated values if 'simulated' is ON
+    fatto = ReadSensor();                                         // Get sensor readings, or get simulated values if 'simulated' is ON    
+   int_enable = 1;
+    if(fatto == 0){
+      Serial.println("sincronizzazione");
+      return;
+    }
     UpdateLocalTime();                                    // Updates Time UnixTime to 'now'
     CheckTimerEvent();                                    // Check for schedules actuated
+      
   }
   if ((millis() - LastReadingCheck) > (LastReadingDuration * 60 * 1000)) {
     LastReadingCheck = millis();                          // Update reading record every ~n-mins e.g. 60,000uS = 1-min
     AssignSensorReadingsToArray();
   }
+
 }
 //#########################################################################################
 void Homepage() {
@@ -535,7 +541,11 @@ void ActuateHeating(bool demand) {
   }
 }
 //#########################################################################################
-void ReadSensor() {
+int ReadSensor() {
+  NEXUS_DATA nexusData = decode_nexus_data();
+  if (nexusData.ID == 0 || nexusData.ID == 128 || nexusData.ID == NULL) {
+    return 0;
+  }
   if (simulating) {
     Temperature = 20.2 + random(-15, 15) / 10.0; // Generate a random temperature value between 18.7° and 21.7°
     Humidity    = random(45, 55);                // Generate a random humidity value between 45% and 55%
@@ -543,11 +553,12 @@ void ReadSensor() {
   else
   {
     Temperature =  nexusData.Temperature;      // Read the current temperature
-    if (Temperature >= 50 || Temperature < -30) Temperature = LastTemperature; // Check and correct any errorneous readings
+    if (Temperature >= 50 || Temperature < 1) Temperature = LastTemperature; // Check and correct any errorneous readings
     LastTemperature = Temperature;
     Humidity = nexusData.Humidity;
     Serial.println("Temperature = " + String(Temperature, 1) + ", Humidity = " + String(Humidity, 0));
   }
+  return 1;
 }
 //#########################################################################################
 void AssignSensorReadingsToArray() {
