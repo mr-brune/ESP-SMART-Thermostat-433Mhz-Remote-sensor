@@ -70,10 +70,10 @@ const String data1Colour    = "red";
 const String data2Colour    = "orange";
 
 //################ VARIABLES ################
-const char* ssid       = "Vodafone-34590861";             // WiFi SSID     replace with details for your local network
-const char* password   = "i26z8a2e7f7jkmu";         // WiFi Password replace with details for your local network
+const char* ssid       = "";             // WiFi SSID     replace with details for your local network
+const char* password   = "";         // WiFi Password replace with details for your local network
 //const char* Timezone   = "GMT0BST,M3.5.0/01,M10.5.0/02";
-const char* Timezone = "CET-1CEST,M3.5.0,M10.5.0/3"; // Central Europe (Italy)
+const char* Timezone = "CET-1CEST,M3.5.0,M10.5.0/3"; // Central Europe 
 // Example time zones
 //const char* Timezone = "MET-1METDST,M3.5.0/01,M10.5.0/02"; // Most of Europe
 //const char* Timezone = "CET-1CEST,M3.5.0,M10.5.0/3";       // Central Europe
